@@ -17,6 +17,7 @@ export class DebateOrchestrator {
   private conversationHistory: DebateMessage[] = []
   private tokenUsage: Map<string, { input: number; output: number }> = new Map()
   private analysis: string = ''  // Store analysis to avoid repeating diff
+  private taskPrompt: string = ''  // Original task prompt (contains PR number, etc.)
 
   constructor(
     reviewers: Reviewer[],
@@ -89,6 +90,7 @@ ${messagesText}`
   async run(label: string, prompt: string): Promise<DebateResult> {
     this.conversationHistory = []
     this.tokenUsage.clear()
+    this.taskPrompt = prompt
     let convergedAtRound: number | undefined
 
     // Run pre-analysis first and store it
@@ -164,6 +166,7 @@ ${messagesText}`
     this.conversationHistory = []
     this.tokenUsage.clear()
     this.analysis = ''
+    this.taskPrompt = prompt
     let convergedAtRound: number | undefined
 
     // Run pre-analysis first (with streaming)
@@ -247,8 +250,14 @@ ${messagesText}`
     const hasHistory = this.conversationHistory.length > 0
     const otherReviewerCount = this.reviewers.length - 1
 
-    // First message: the analysis (not the raw diff)
-    let prompt = `Here is the analysis of the code changes:\n\n${this.analysis}\n\nPlease review these changes and provide your feedback.`
+    // First message: task + analysis
+    let prompt = `Task: ${this.taskPrompt}
+
+Here is the analysis of the code changes:
+
+${this.analysis}
+
+Please review these changes and provide your feedback. You can use the commands mentioned in the task to get more details if needed.`
 
     if (hasHistory) {
       prompt += `
