@@ -1,62 +1,62 @@
 # Magpie
 
-多 AI 对抗式 PR Review 工具。让不同的 AI 模型像 Linus Torvalds 一样审查你的代码，通过辩论产生更全面的 review 结果。
+Multi-AI adversarial PR review tool. Let different AI models review your code like Linus Torvalds, generating more comprehensive reviews through debate.
 
-## 核心理念
+## Core Concepts
 
-- **同一视角，不同模型**：所有 reviewer 使用相同的 prompt（Linus 风格），但由不同的 AI 模型扮演
-- **自然对抗**：模型之间的差异会自然产生分歧和辩论
-- **去迎合化**：明确告知 AI 他们在与其他 AI 辩论，避免互相迎合
+- **Same Perspective, Different Models**: All reviewers use the same prompt (Linus-style), but are powered by different AI models
+- **Natural Adversarial**: Differences between models naturally create disagreements and debates
+- **Anti-Sycophancy**: Explicitly tells AI they're debating with other AIs, preventing mutual agreement bias
 
-## 支持的 AI Provider
+## Supported AI Providers
 
-| Provider | 说明 |
-|----------|------|
-| `claude-code` | Claude Code CLI（需安装 `claude` 命令） |
-| `codex-cli` | OpenAI Codex CLI（需安装 `codex` 命令） |
-| `gemini-*` | Google Gemini API（需配置 API Key） |
-| `anthropic` | Anthropic API（需配置 API Key） |
-| `openai` | OpenAI API（需配置 API Key） |
+| Provider | Description |
+|----------|-------------|
+| `claude-code` | Claude Code CLI (requires `claude` command) |
+| `codex-cli` | OpenAI Codex CLI (requires `codex` command) |
+| `gemini-*` | Google Gemini API (requires API Key) |
+| `anthropic` | Anthropic API (requires API Key) |
+| `openai` | OpenAI API (requires API Key) |
 
-## 安装
+## Installation
 
 ```bash
-# 克隆项目
-git clone <repo-url>
+# Clone the repo
+git clone https://github.com/liliu-z/magpie.git
 cd magpie
 
-# 安装依赖
+# Install dependencies
 npm install
 
-# 编译
+# Build
 npm run build
 
-# 全局安装（可选）
+# Global install (optional)
 npm link
 ```
 
-## 快速开始
+## Quick Start
 
 ```bash
-# 初始化配置文件
+# Initialize config file
 magpie init
 
-# 编辑配置
+# Edit config
 vim ~/.magpie/config.yaml
 
-# 进入要 review 的仓库目录
+# Navigate to the repo you want to review
 cd your-repo
 
-# 开始 review
+# Start review
 magpie review 12345
 ```
 
-## 配置文件
+## Configuration
 
-配置文件位于 `~/.magpie/config.yaml`：
+Config file is located at `~/.magpie/config.yaml`:
 
 ```yaml
-# AI Providers 配置
+# AI Providers config
 providers:
   claude-code:
     enabled: true
@@ -65,13 +65,13 @@ providers:
   google:
     api_key: YOUR_GEMINI_API_KEY
 
-# 默认设置
+# Default settings
 defaults:
   max_rounds: 2
   output_format: markdown
-  check_convergence: true  # 达成共识时提前结束
+  check_convergence: true  # Stop early when consensus reached
 
-# Reviewers - 相同视角，不同模型
+# Reviewers - same perspective, different models
 reviewers:
   claude:
     model: claude-code
@@ -85,85 +85,83 @@ reviewers:
       3. **Architecture** - Does this fit the overall design? Any coupling issues?
       4. **Simplicity** - Is this the simplest solution? Over-engineering?
 
-      输出使用中文。
-
   codex:
     model: codex-cli
     prompt: |
-      # 同上...
+      # Same as above...
 
-# Analyzer - PR 分析（辩论前）
+# Analyzer - PR analysis (before debate)
 analyzer:
   model: claude-code
   prompt: |
-    你是一位资深工程师，在 review 辩论开始前提供 PR 背景分析。
-    请分析这个 PR 并提供：
-    1. 这个 PR 做了什么
-    2. 架构/设计决策
-    3. 目的
-    4. 权衡
-    5. 注意事项
+    You are a senior engineer providing PR context analysis.
+    Analyze this PR and provide:
+    1. What this PR does
+    2. Architecture/design decisions
+    3. Purpose
+    4. Trade-offs
+    5. Things to note
 
-# Summarizer - 最终总结
+# Summarizer - final conclusion
 summarizer:
   model: claude-code
   prompt: |
-    你是一位中立的技术评审员。基于各位匿名 reviewer 的总结，请提供：
-    1. 共识点
-    2. 分歧点
-    3. 建议的行动项
-    4. 总体评估
+    You are a neutral technical reviewer. Based on the anonymous reviewer summaries, provide:
+    1. Points of consensus
+    2. Points of disagreement
+    3. Recommended action items
+    4. Overall assessment
 ```
 
-## 命令行选项
+## CLI Options
 
 ```bash
 magpie review <pr-number> [options]
 
-选项:
-  -c, --config <path>   指定配置文件路径
-  -r, --rounds <number> 最大辩论轮数（默认: 3）
-  -i, --interactive     交互模式（每轮暂停，可插入意见）
-  -o, --output <file>   输出到文件
-  -f, --format <format> 输出格式 (markdown|json)
-  --no-converge         禁用收敛检测（默认启用）
+Options:
+  -c, --config <path>   Path to config file
+  -r, --rounds <number> Maximum debate rounds (default: 3)
+  -i, --interactive     Interactive mode (pause between turns)
+  -o, --output <file>   Output to file
+  -f, --format <format> Output format (markdown|json)
+  --no-converge         Disable convergence detection (enabled by default)
 ```
 
-## 工作流程
+## Workflow
 
 ```
-1. Analyzer 分析 PR
+1. Analyzer analyzes PR
    ↓
-2. 多轮辩论
-   ├─ Reviewer 1 (Claude) 发表意见
-   ├─ Reviewer 2 (Codex) 回应并补充
-   ├─ Reviewer 1 反驳或认同
-   └─ ... (重复直到达到最大轮数或收敛)
+2. Multi-round debate
+   ├─ Reviewer 1 (Claude) gives feedback
+   ├─ Reviewer 2 (Codex) responds and adds insights
+   ├─ Reviewer 1 rebuts or agrees
+   └─ ... (repeat until max rounds or convergence)
    ↓
-3. 各 Reviewer 总结自己的观点
+3. Each Reviewer summarizes their points
    ↓
-4. Summarizer 汇总产出最终结论
+4. Summarizer produces final conclusion
 ```
 
-## 功能特性
+## Features
 
-### 收敛检测
+### Convergence Detection
 
-默认启用。当 reviewer 们在关键点上达成共识时，自动结束辩论，节省 token。
+Enabled by default. Automatically ends debate when reviewers reach consensus on key points, saving tokens.
 
 ```bash
-# 默认启用收敛检测
+# Convergence detection enabled by default
 magpie review 12345
 
-# 禁用收敛检测
+# Disable convergence detection
 magpie review 12345 --no-converge
 ```
 
-可在配置文件中设置 `defaults.check_convergence: false` 来默认禁用。
+Set `defaults.check_convergence: false` in config to disable by default.
 
-### Token 使用统计
+### Token Usage Tracking
 
-每次 review 结束后显示各 reviewer 的 token 使用量和估算成本：
+Displays token usage and estimated cost after each review:
 
 ```
 === Token Usage (Estimated) ===
@@ -174,24 +172,24 @@ magpie review 12345 --no-converge
   Total: 9,491 in / 2,603 out (~$0.1209)
 ```
 
-### 交互模式
+### Interactive Mode
 
-使用 `-i` 进入交互模式，可以在辩论过程中插入自己的意见：
+Use `-i` to enter interactive mode, allowing you to inject your own opinions during the debate:
 
 ```bash
 magpie review 12345 -i
 ```
 
-## 开发
+## Development
 
 ```bash
-# 开发模式运行
+# Run in dev mode
 npm run dev -- review 12345
 
-# 运行测试
+# Run tests
 npm test
 
-# 编译
+# Build
 npm run build
 ```
 
