@@ -40,7 +40,7 @@ export const reviewCommand = new Command('review')
         target = {
           type: 'local',
           label: 'Local Changes',
-          prompt: 'Review the local uncommitted changes. Use `git diff` and `git diff --cached` to get the changes.'
+          prompt: 'Review the local uncommitted changes (staged and unstaged).'
         }
       } else if (options.branch !== undefined) {
         const baseBranch = typeof options.branch === 'string' ? options.branch : 'main'
@@ -48,19 +48,19 @@ export const reviewCommand = new Command('review')
         target = {
           type: 'branch',
           label: `Branch: ${currentBranch}`,
-          prompt: `Review the changes in branch "${currentBranch}" compared to "${baseBranch}". Use \`git diff ${baseBranch}...HEAD\` to get the diff.`
+          prompt: `Review the changes in branch "${currentBranch}" compared to "${baseBranch}".`
         }
       } else if (options.files) {
         target = {
           type: 'files',
           label: `Files: ${options.files.join(', ')}`,
-          prompt: `Review the following files: ${options.files.join(', ')}. Read the file contents and analyze the code.`
+          prompt: `Review the following files: ${options.files.join(', ')}.`
         }
       } else if (pr) {
         target = {
           type: 'pr',
           label: `PR #${pr}`,
-          prompt: `Review PR #${pr}. Use \`gh pr view ${pr}\` and \`gh pr diff ${pr}\` to get the PR details and changes.`
+          prompt: `Review PR #${pr}.`
         }
       } else {
         spinner.fail('Error')

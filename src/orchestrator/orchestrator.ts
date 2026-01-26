@@ -253,11 +253,11 @@ ${messagesText}`
     // First message: task + analysis
     let prompt = `Task: ${this.taskPrompt}
 
-Here is the analysis of the code changes:
+Here is the analysis:
 
 ${this.analysis}
 
-Please review these changes and provide your feedback. You can use the commands mentioned in the task to get more details if needed.`
+Please review and provide your feedback. You can fetch more details if needed.`
 
     if (hasHistory) {
       prompt += `
