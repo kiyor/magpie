@@ -11,75 +11,7 @@ import { createInterface } from 'readline'
 interface ReviewTarget {
   type: 'pr' | 'local' | 'branch' | 'files'
   label: string
-  diff?: string  // For local modes, we provide the diff directly
-  pr?: string    // For PR mode
-}
-
-function getLocalDiff(): string {
-  try {
-    // Get both staged and unstaged changes
-    const staged = execSync('git diff --cached', { encoding: 'utf-8' })
-    const unstaged = execSync('git diff', { encoding: 'utf-8' })
-    const diff = staged + unstaged
-    if (!diff.trim()) {
-      throw new Error('No local changes found')
-    }
-    return diff
-  } catch (error) {
-    if (error instanceof Error && error.message === 'No local changes found') {
-      throw error
-    }
-    throw new Error('Failed to get local diff. Are you in a git repository?')
-  }
-}
-
-function getBranchDiff(baseBranch?: string): string {
-  try {
-    // Detect default branch if not specified
-    const base = baseBranch || execSync('git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo "origin/main"', { encoding: 'utf-8' }).trim().replace('refs/remotes/', '')
-    const diff = execSync(`git diff ${base}...HEAD`, { encoding: 'utf-8' })
-    if (!diff.trim()) {
-      throw new Error(`No changes found between ${base} and HEAD`)
-    }
-    return diff
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('No changes found')) {
-      throw error
-    }
-    throw new Error('Failed to get branch diff. Are you in a git repository?')
-  }
-}
-
-function getFilesDiff(files: string[]): string {
-  try {
-    // Get diff for specific files (both staged and unstaged)
-    const fileList = files.join(' ')
-    const staged = execSync(`git diff --cached -- ${fileList}`, { encoding: 'utf-8' })
-    const unstaged = execSync(`git diff -- ${fileList}`, { encoding: 'utf-8' })
-    const diff = staged + unstaged
-    if (!diff.trim()) {
-      // If no diff, show the file contents as "new" files
-      let content = ''
-      for (const file of files) {
-        try {
-          const fileContent = execSync(`cat "${file}"`, { encoding: 'utf-8' })
-          content += `=== ${file} ===\n${fileContent}\n\n`
-        } catch {
-          // File might not exist
-        }
-      }
-      if (!content) {
-        throw new Error('No changes or content found for specified files')
-      }
-      return content
-    }
-    return diff
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('No changes')) {
-      throw error
-    }
-    throw new Error('Failed to get files diff')
-  }
+  prompt: string  // The prompt telling AI what to review
 }
 
 export const reviewCommand = new Command('review')
@@ -105,24 +37,31 @@ export const reviewCommand = new Command('review')
       let target: ReviewTarget
 
       if (options.local) {
-        spinner.start('Getting local changes...')
-        const diff = getLocalDiff()
-        spinner.succeed('Local changes loaded')
-        target = { type: 'local', label: 'Local Changes', diff }
+        target = {
+          type: 'local',
+          label: 'Local Changes',
+          prompt: 'Review the local uncommitted changes. Use `git diff` and `git diff --cached` to get the changes.'
+        }
       } else if (options.branch !== undefined) {
-        const baseBranch = typeof options.branch === 'string' ? options.branch : undefined
-        spinner.start('Getting branch diff...')
-        const diff = getBranchDiff(baseBranch)
+        const baseBranch = typeof options.branch === 'string' ? options.branch : 'main'
         const currentBranch = execSync('git branch --show-current', { encoding: 'utf-8' }).trim()
-        spinner.succeed('Branch diff loaded')
-        target = { type: 'branch', label: `Branch: ${currentBranch}`, diff }
+        target = {
+          type: 'branch',
+          label: `Branch: ${currentBranch}`,
+          prompt: `Review the changes in branch "${currentBranch}" compared to "${baseBranch}". Use \`git diff ${baseBranch}...HEAD\` to get the diff.`
+        }
       } else if (options.files) {
-        spinner.start('Getting files diff...')
-        const diff = getFilesDiff(options.files)
-        spinner.succeed('Files loaded')
-        target = { type: 'files', label: `Files: ${options.files.join(', ')}`, diff }
+        target = {
+          type: 'files',
+          label: `Files: ${options.files.join(', ')}`,
+          prompt: `Review the following files: ${options.files.join(', ')}. Read the file contents and analyze the code.`
+        }
       } else if (pr) {
-        target = { type: 'pr', label: `PR #${pr}`, pr }
+        target = {
+          type: 'pr',
+          label: `PR #${pr}`,
+          prompt: `Review PR #${pr}. Use \`gh pr view ${pr}\` and \`gh pr diff ${pr}\` to get the PR details and changes.`
+        }
       } else {
         spinner.fail('Error')
         console.error(chalk.red('Error: Please specify a PR number or use --local, --branch, or --files'))
@@ -225,15 +164,7 @@ export const reviewCommand = new Command('review')
         } : undefined
       })
 
-      // Build the prompt based on target type
-      let initialPrompt: string
-      if (target.diff) {
-        initialPrompt = `Please review the following code changes:\n\n\`\`\`diff\n${target.diff}\n\`\`\`\n\nAnalyze these changes and provide your feedback.`
-      } else {
-        initialPrompt = `Please review PR #${target.pr}. Get the PR details and diff using any method available to you, then analyze the changes.`
-      }
-
-      const result = await orchestrator.runStreaming(target.pr || target.label, initialPrompt, target.diff)
+      const result = await orchestrator.runStreaming(target.label, target.prompt)
 
       // Final conclusion with nice formatting
       console.log(chalk.green.bold(`\n${'═'.repeat(50)}`))

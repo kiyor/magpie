@@ -79,26 +79,20 @@ ${messagesText}`
     return response.trim().toUpperCase().includes('CONVERGED')
   }
 
-  private async preAnalyze(label: string, diff?: string): Promise<string> {
-    let prompt: string
-    if (diff) {
-      prompt = `Please analyze the following code changes:\n\n\`\`\`diff\n${diff}\n\`\`\`\n\nProvide a summary of what these changes do.`
-    } else {
-      prompt = `Please analyze PR #${label}. Get the PR details and diff using any method available to you.`
-    }
+  private async preAnalyze(prompt: string): Promise<string> {
     const messages: Message[] = [{ role: 'user', content: prompt }]
     const response = await this.analyzer.provider.chat(messages, this.analyzer.systemPrompt)
     this.trackTokens('analyzer', prompt + (this.analyzer.systemPrompt || ''), response)
     return response
   }
 
-  async run(label: string, initialPrompt: string, diff?: string): Promise<DebateResult> {
+  async run(label: string, prompt: string): Promise<DebateResult> {
     this.conversationHistory = []
     this.tokenUsage.clear()
     let convergedAtRound: number | undefined
 
     // Run pre-analysis first and store it
-    this.analysis = await this.preAnalyze(label, diff)
+    this.analysis = await this.preAnalyze(prompt)
 
     // Run debate rounds
     for (let round = 1; round <= this.options.maxRounds; round++) {
@@ -166,20 +160,14 @@ ${messagesText}`
     }
   }
 
-  async runStreaming(label: string, initialPrompt: string, diff?: string): Promise<DebateResult> {
+  async runStreaming(label: string, prompt: string): Promise<DebateResult> {
     this.conversationHistory = []
     this.tokenUsage.clear()
     this.analysis = ''
     let convergedAtRound: number | undefined
 
     // Run pre-analysis first (with streaming)
-    let analyzePrompt: string
-    if (diff) {
-      analyzePrompt = `Please analyze the following code changes:\n\n\`\`\`diff\n${diff}\n\`\`\`\n\nProvide a summary of what these changes do.`
-    } else {
-      analyzePrompt = `Please analyze PR #${label}. Get the PR details and diff using any method available to you.`
-    }
-    const analyzeMessages: Message[] = [{ role: 'user', content: analyzePrompt }]
+    const analyzeMessages: Message[] = [{ role: 'user', content: prompt }]
 
     // Stream the analysis
     this.options.onWaiting?.('analyzer')
@@ -187,7 +175,7 @@ ${messagesText}`
       this.analysis += chunk
       this.options.onMessage?.('analyzer', chunk)
     }
-    this.trackTokens('analyzer', analyzePrompt + (this.analyzer.systemPrompt || ''), this.analysis)
+    this.trackTokens('analyzer', prompt + (this.analyzer.systemPrompt || ''), this.analysis)
 
     for (let round = 1; round <= this.options.maxRounds; round++) {
       for (const reviewer of this.reviewers) {
