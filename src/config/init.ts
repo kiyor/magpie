@@ -28,6 +28,13 @@ export const AVAILABLE_REVIEWERS: ReviewerOption[] = [
     needsApiKey: false
   },
   {
+    id: 'gemini-cli',
+    name: 'Gemini CLI',
+    model: 'gemini-cli',
+    description: 'Uses your Gemini CLI (Google account, no API key needed)',
+    needsApiKey: false
+  },
+  {
     id: 'claude-api',
     name: 'Claude Sonnet 4.5',
     model: 'claude-sonnet-4-5-20250514',

@@ -5,14 +5,18 @@ import { AnthropicProvider } from './anthropic.js'
 import { OpenAIProvider } from './openai.js'
 import { ClaudeCodeProvider } from './claude-code.js'
 import { CodexCliProvider } from './codex-cli.js'
+import { GeminiCliProvider } from './gemini-cli.js'
 import { GeminiProvider } from './gemini.js'
 
-export function getProviderForModel(model: string): 'anthropic' | 'openai' | 'google' | 'claude-code' | 'codex-cli' {
+export function getProviderForModel(model: string): 'anthropic' | 'openai' | 'google' | 'claude-code' | 'codex-cli' | 'gemini-cli' {
   if (model === 'claude-code') {
     return 'claude-code'
   }
   if (model === 'codex-cli') {
     return 'codex-cli'
+  }
+  if (model === 'gemini-cli') {
+    return 'gemini-cli'
   }
   if (model.startsWith('claude')) {
     return 'anthropic'
@@ -37,6 +41,11 @@ export function createProvider(model: string, config: MagpieConfig): AIProvider 
   // Codex CLI doesn't need API key config
   if (providerName === 'codex-cli') {
     return new CodexCliProvider()
+  }
+
+  // Gemini CLI doesn't need API key config (uses Google account)
+  if (providerName === 'gemini-cli') {
+    return new GeminiCliProvider()
   }
 
   const providerConfig = config.providers[providerName]
