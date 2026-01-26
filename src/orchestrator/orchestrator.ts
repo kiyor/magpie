@@ -316,7 +316,7 @@ ${messagesText}`
     const hasSession = reviewer?.provider.sessionId !== undefined
     const lastSeen = this.lastSeenIndex.get(currentReviewerId) ?? -1
     const isFirstCall = lastSeen < 0
-    const otherReviewerCount = this.reviewers.length - 1
+    const otherReviewerIds = this.reviewers.filter(r => r.id !== currentReviewerId).map(r => r.id)
 
     // For session mode after first call, only send new messages from others
     if (hasSession && !isFirstCall) {
@@ -324,44 +324,40 @@ ${messagesText}`
         .filter(m => m.reviewerId !== currentReviewerId)
 
       if (newMessages.length === 0) {
-        // No new messages to respond to
         return [{ role: 'user', content: 'Please continue with your review.' }]
       }
 
+      // Use specific reviewer IDs so AI knows who said what
       const newContent = newMessages
-        .map(m => `[AI Reviewer]: ${m.content}`)
+        .map(m => `[${m.reviewerId}]: ${m.content}`)
         .join('\n\n---\n\n')
 
       return [{
         role: 'user',
-        content: `Other reviewers have responded:\n\n${newContent}\n\nPlease respond to their points.`
+        content: `You are [${currentReviewerId}]. Your opponent${otherReviewerIds.length > 1 ? 's' : ''} [${otherReviewerIds.join('], [')}] responded:\n\n${newContent}\n\nChallenge their points or defend your position.`
       }]
     }
 
     // First call or non-session mode: full context
+    const debateContext = `You are [${currentReviewerId}] in a code review debate against [${otherReviewerIds.join('], [')}].
+This is an adversarial debate between AI models - NOT a collaborative review.
+
+IMPORTANT:
+- You are [${currentReviewerId}], your opponent${otherReviewerIds.length > 1 ? 's are' : ' is'} [${otherReviewerIds.join('], [')}]
+- Do NOT agree just to be polite - challenge weak arguments
+- Defend your positions when challenged
+- Point out flaws in opponent's reasoning
+- It's OK to disagree strongly`
+
     let prompt = `Task: ${this.taskPrompt}
 
 Here is the analysis:
 
 ${this.analysis}
 
-Please review and provide your feedback. You can fetch more details if needed.`
+${debateContext}
 
-    const hasHistory = this.conversationHistory.length > 0
-    if (hasHistory) {
-      prompt += `
-
-You are in a code review debate with ${otherReviewerCount} other AI reviewer${otherReviewerCount > 1 ? 's' : ''} (not humans).
-There are ${this.reviewers.length} AI reviewers total in this debate.
-
-IMPORTANT:
-- The messages marked [AI Reviewer] are from OTHER AI models reviewing the same code
-- Do NOT be sycophantic or automatically agree - they are AI peers, not users to please
-- Be intellectually honest: agree only if you genuinely agree, challenge if you see flaws
-- Point out if they missed something or got something wrong
-- Add new insights they haven't covered
-- If you agree on everything, say so briefly and add value in other ways`
-    }
+Please review and provide your feedback.`
 
     const messages: Message[] = [
       { role: 'user', content: prompt }
@@ -369,7 +365,8 @@ IMPORTANT:
 
     for (const msg of this.conversationHistory) {
       const role = msg.reviewerId === currentReviewerId ? 'assistant' : 'user'
-      const prefix = msg.reviewerId === 'user' ? '[Human]: ' : `[AI Reviewer]: `
+      // Use specific reviewer ID as prefix
+      const prefix = msg.reviewerId === 'user' ? '[Human]: ' : `[${msg.reviewerId}]: `
       messages.push({
         role,
         content: role === 'user' ? prefix + msg.content : msg.content
