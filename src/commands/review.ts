@@ -262,9 +262,14 @@ export const reviewCommand = new Command('review')
             clearInterval(spinnerRef.interval)
             spinnerRef.interval = null
           }
+          // Show separator for convergence check to make it stand out
+          if (reviewerId === 'convergence-check') {
+            console.log(chalk.yellow.bold(`\n┌─ 🔍 Convergence Judge ─────────────────────────`))
+          }
+
           const baseLabel = reviewerId === 'analyzer' ? 'Analyzing changes' :
                        reviewerId === 'summarizer' ? 'Generating final summary' :
-                       reviewerId === 'convergence-check' ? 'Checking convergence' :
+                       reviewerId === 'convergence-check' ? 'Evaluating if reviewers reached consensus' :
                        `${reviewerId} is thinking`
 
           // Show spinner with a joke
@@ -308,10 +313,12 @@ export const reviewCommand = new Command('review')
         onRoundComplete: (round, converged) => {
           console.log()
           if (converged) {
+            console.log(chalk.yellow(`└─ Verdict: `) + chalk.green.bold(`CONVERGED`))
             console.log(chalk.green.bold(`\n✅ Round ${round}/${maxRounds} - CONSENSUS REACHED`))
             console.log(chalk.green(`   Stopping early to save tokens.\n`))
           } else {
-            console.log(chalk.dim(`── Round ${round}/${maxRounds} complete ──\n`))
+            console.log(chalk.yellow(`└─ Verdict: `) + chalk.red.bold(`NOT CONVERGED`))
+            console.log(chalk.dim(`\n── Round ${round}/${maxRounds} complete ──\n`))
           }
           currentRound = round + 1
         },
