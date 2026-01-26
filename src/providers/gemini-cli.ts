@@ -5,9 +5,9 @@ export class GeminiCliProvider implements AIProvider {
   name = 'gemini-cli'
   private cwd: string
   private timeout: number  // ms, 0 = no timeout
-  sessionId?: string  // For interface compatibility
-  private hasSession: boolean = false
-  private isFirstMessage: boolean = true
+  // Gemini CLI doesn't support custom session IDs (only index numbers)
+  // So we don't enable session mode - orchestrator will use full context
+  sessionId?: string  // Always undefined
 
   constructor(_options?: ProviderOptions) {
     // No API key needed for Gemini CLI (uses Google account)
@@ -19,33 +19,18 @@ export class GeminiCliProvider implements AIProvider {
     this.cwd = cwd
   }
 
-  startSession(): void {
-    this.hasSession = true
-    this.isFirstMessage = true
-    this.sessionId = 'gemini-session'  // Mark as having session for orchestrator
-  }
-
-  endSession(): void {
-    this.hasSession = false
-    this.isFirstMessage = true
-    this.sessionId = undefined
-  }
+  // No-op: Gemini CLI doesn't support reliable session management
+  startSession(): void {}
+  endSession(): void {}
 
   async chat(messages: Message[], systemPrompt?: string): Promise<string> {
-    const prompt = this.hasSession && !this.isFirstMessage
-      ? this.buildPromptLastOnly(messages)
-      : this.buildPrompt(messages, systemPrompt)
-    const result = await this.runGemini(prompt)
-    this.isFirstMessage = false
-    return result
+    const prompt = this.buildPrompt(messages, systemPrompt)
+    return await this.runGemini(prompt)
   }
 
   async *chatStream(messages: Message[], systemPrompt?: string): AsyncGenerator<string, void, unknown> {
-    const prompt = this.hasSession && !this.isFirstMessage
-      ? this.buildPromptLastOnly(messages)
-      : this.buildPrompt(messages, systemPrompt)
+    const prompt = this.buildPrompt(messages, systemPrompt)
     yield* this.runGeminiStream(prompt)
-    this.isFirstMessage = false
   }
 
   private buildPrompt(messages: Message[], systemPrompt?: string): string {
@@ -59,24 +44,11 @@ export class GeminiCliProvider implements AIProvider {
     return prompt
   }
 
-  private buildPromptLastOnly(messages: Message[]): string {
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
-    return lastUserMsg?.content || ''
-  }
-
   private runGemini(prompt: string): Promise<string> {
     return new Promise((resolve, reject) => {
       // Gemini CLI uses positional prompt and -y for auto-approve
       // Use --output-format text for clean output
-      const args = ['-y', '-o', 'text']
-
-      // Resume session if not first message
-      if (this.hasSession && !this.isFirstMessage) {
-        args.push('-r', 'latest')
-      }
-
-      // Add the prompt as positional argument
-      args.push(prompt)
+      const args = ['-y', '-o', 'text', prompt]
 
       const child = spawn('gemini', args, {
         cwd: this.cwd,
@@ -110,15 +82,7 @@ export class GeminiCliProvider implements AIProvider {
 
   private async *runGeminiStream(prompt: string): AsyncGenerator<string, void, unknown> {
     // Gemini CLI with text output for streaming
-    const args = ['-y', '-o', 'text']
-
-    // Resume session if not first message
-    if (this.hasSession && !this.isFirstMessage) {
-      args.push('-r', 'latest')
-    }
-
-    // Add the prompt as positional argument
-    args.push(prompt)
+    const args = ['-y', '-o', 'text', prompt]
 
     const child = spawn('gemini', args, {
       cwd: this.cwd,

@@ -172,7 +172,14 @@ magpie review --files src/foo.ts src/bar.ts
 
 ### Session Persistence
 
-Each reviewer maintains a session across debate rounds, reducing token usage by not re-sending full conversation history.
+Reviewers that support sessions maintain context across debate rounds, reducing token usage.
+
+| Provider | Session Support |
+|----------|-----------------|
+| `claude-code` | Yes - Full session with explicit ID |
+| `codex-cli` | Yes - Full session with explicit ID |
+| `gemini-cli` | No - Uses full context each round |
+| API providers | No - Uses full context each round |
 
 ### Post-Analysis Q&A (Interactive Mode)
 
