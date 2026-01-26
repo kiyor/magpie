@@ -231,6 +231,7 @@ export const reviewCommand = new Command('review')
 
       let currentReviewer = ''
       let currentRound = 1
+      let messageBuffer = ''  // Buffer for current reviewer's message
 
       // Use object ref to avoid TypeScript control flow issues with closures
       const spinnerRef: { spinner: ReturnType<typeof ora> | null; interval: ReturnType<typeof setInterval> | null } = {
@@ -238,11 +239,22 @@ export const reviewCommand = new Command('review')
         interval: null
       }
 
+      // Render buffered message when reviewer changes
+      const flushBuffer = () => {
+        if (messageBuffer) {
+          console.log(marked(messageBuffer))
+          messageBuffer = ''
+        }
+      }
+
       const orchestrator = new DebateOrchestrator(reviewers, summarizer, analyzer, {
         maxRounds,
         interactive: options.interactive,
         checkConvergence,
         onWaiting: (reviewerId) => {
+          // Flush previous reviewer's buffer before showing spinner
+          flushBuffer()
+
           if (spinnerRef.spinner) {
             spinnerRef.spinner.stop()
           }
@@ -278,6 +290,8 @@ export const reviewCommand = new Command('review')
             spinnerRef.spinner = null
           }
           if (reviewerId !== currentReviewer) {
+            // Flush previous reviewer's buffer
+            flushBuffer()
             currentReviewer = reviewerId
             if (reviewerId === 'analyzer') {
               console.log(chalk.magenta.bold(`\n${'─'.repeat(50)}`))
@@ -288,7 +302,8 @@ export const reviewCommand = new Command('review')
               console.log(chalk.cyan(`│`))
             }
           }
-          process.stdout.write(chunk)
+          // Buffer the chunk instead of writing directly
+          messageBuffer += chunk
         },
         onRoundComplete: (round, converged) => {
           console.log()
@@ -332,6 +347,9 @@ export const reviewCommand = new Command('review')
       })
 
       const result = await orchestrator.runStreaming(target.label, target.prompt)
+
+      // Flush any remaining buffered content
+      flushBuffer()
 
       // Stop any lingering spinner/interval (summarizer doesn't stream)
       if (spinnerRef.interval) {
