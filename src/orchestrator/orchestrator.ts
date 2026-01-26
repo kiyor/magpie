@@ -78,21 +78,26 @@ ${messagesText}`
     return response.trim().toUpperCase().includes('CONVERGED')
   }
 
-  private async preAnalyze(prNumber: string): Promise<string> {
-    const prompt = `Please analyze PR #${prNumber}. Get the PR details and diff using any method available to you.`
+  private async preAnalyze(label: string, diff?: string): Promise<string> {
+    let prompt: string
+    if (diff) {
+      prompt = `Please analyze the following code changes:\n\n\`\`\`diff\n${diff}\n\`\`\`\n\nProvide a summary of what these changes do.`
+    } else {
+      prompt = `Please analyze PR #${label}. Get the PR details and diff using any method available to you.`
+    }
     const messages: Message[] = [{ role: 'user', content: prompt }]
     const response = await this.analyzer.provider.chat(messages, this.analyzer.systemPrompt)
     this.trackTokens('analyzer', prompt + (this.analyzer.systemPrompt || ''), response)
     return response
   }
 
-  async run(prNumber: string, initialPrompt: string): Promise<DebateResult> {
+  async run(label: string, initialPrompt: string, diff?: string): Promise<DebateResult> {
     this.conversationHistory = []
     this.tokenUsage.clear()
     let convergedAtRound: number | undefined
 
     // Run pre-analysis first
-    const analysis = await this.preAnalyze(prNumber)
+    const analysis = await this.preAnalyze(label, diff)
 
     // Run debate rounds
     for (let round = 1; round <= this.options.maxRounds; round++) {
@@ -150,7 +155,7 @@ ${messagesText}`
     const finalConclusion = await this.getFinalConclusion(summaries)
 
     return {
-      prNumber,
+      prNumber: label,
       analysis,
       messages: this.conversationHistory,
       summaries,
@@ -160,14 +165,19 @@ ${messagesText}`
     }
   }
 
-  async runStreaming(prNumber: string, initialPrompt: string): Promise<DebateResult> {
+  async runStreaming(label: string, initialPrompt: string, diff?: string): Promise<DebateResult> {
     this.conversationHistory = []
     this.tokenUsage.clear()
     let convergedAtRound: number | undefined
 
     // Run pre-analysis first (with streaming)
     let analysis = ''
-    const analyzePrompt = `Please analyze PR #${prNumber}. Get the PR details and diff using any method available to you.`
+    let analyzePrompt: string
+    if (diff) {
+      analyzePrompt = `Please analyze the following code changes:\n\n\`\`\`diff\n${diff}\n\`\`\`\n\nProvide a summary of what these changes do.`
+    } else {
+      analyzePrompt = `Please analyze PR #${label}. Get the PR details and diff using any method available to you.`
+    }
     const analyzeMessages: Message[] = [{ role: 'user', content: analyzePrompt }]
 
     // Stream the analysis
@@ -234,7 +244,7 @@ ${messagesText}`
     const finalConclusion = await this.getFinalConclusion(summaries)
 
     return {
-      prNumber,
+      prNumber: label,
       analysis,
       messages: this.conversationHistory,
       summaries,

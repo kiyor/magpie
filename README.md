@@ -116,15 +116,37 @@ summarizer:
 ## CLI Options
 
 ```bash
-magpie review <pr-number> [options]
+magpie review [pr-number] [options]
 
 Options:
-  -c, --config <path>   Path to config file
-  -r, --rounds <number> Maximum debate rounds (default: 3)
-  -i, --interactive     Interactive mode (pause between turns)
-  -o, --output <file>   Output to file
-  -f, --format <format> Output format (markdown|json)
-  --no-converge         Disable convergence detection (enabled by default)
+  -c, --config <path>    Path to config file
+  -r, --rounds <number>  Maximum debate rounds (default: 3)
+  -i, --interactive      Interactive mode (pause between turns)
+  -o, --output <file>    Output to file
+  -f, --format <format>  Output format (markdown|json)
+  --no-converge          Disable convergence detection (enabled by default)
+  -l, --local            Review local uncommitted changes
+  -b, --branch [base]    Review current branch vs base (default: main)
+  --files <files...>     Review specific files
+```
+
+### Review Modes
+
+```bash
+# Review a GitHub PR
+magpie review 12345
+
+# Review local uncommitted changes (staged + unstaged)
+magpie review --local
+
+# Review current branch vs main
+magpie review --branch
+
+# Review current branch vs specific base
+magpie review --branch develop
+
+# Review specific files
+magpie review --files src/foo.ts src/bar.ts
 ```
 
 ## Workflow
