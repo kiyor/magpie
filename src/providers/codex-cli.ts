@@ -4,10 +4,12 @@ import type { AIProvider, Message, ProviderOptions } from './types.js'
 export class CodexCliProvider implements AIProvider {
   name = 'codex-cli'
   private cwd: string
+  private timeout: number  // ms, 0 = no timeout
 
   constructor(_options?: ProviderOptions) {
     // No API key needed for Codex CLI (uses subscription)
     this.cwd = process.cwd()
+    this.timeout = 5 * 60 * 1000  // 5 minutes default
   }
 
   setCwd(cwd: string) {
@@ -85,8 +87,22 @@ export class CodexCliProvider implements AIProvider {
     let resolveNext: ((value: IteratorResult<string, void>) => void) | null = null
     let done = false
     let error: Error | null = null
+    let lastActivity = Date.now()
+
+    // Timeout checker - kill if no activity for too long
+    const timeoutChecker = this.timeout > 0 ? setInterval(() => {
+      if (Date.now() - lastActivity > this.timeout) {
+        child.kill('SIGTERM')
+        done = true
+        error = new Error(`Codex CLI timed out after ${this.timeout / 1000}s of inactivity`)
+        if (resolveNext) {
+          resolveNext({ value: undefined as any, done: true })
+        }
+      }
+    }, 10000) : null  // Check every 10s
 
     child.stdout.on('data', (data) => {
+      lastActivity = Date.now()
       const chunk = data.toString()
       if (resolveNext) {
         resolveNext({ value: chunk, done: false })
@@ -97,12 +113,13 @@ export class CodexCliProvider implements AIProvider {
     })
 
     child.stderr.on('data', (_data) => {
-      // Ignore stderr
+      lastActivity = Date.now()  // Activity on stderr also counts
     })
 
     child.on('close', (code) => {
+      if (timeoutChecker) clearInterval(timeoutChecker)
       done = true
-      if (code !== 0) {
+      if (code !== 0 && !error) {
         error = new Error(`Codex CLI exited with code ${code}`)
       }
       if (resolveNext) {
@@ -111,6 +128,7 @@ export class CodexCliProvider implements AIProvider {
     })
 
     child.on('error', (err) => {
+      if (timeoutChecker) clearInterval(timeoutChecker)
       done = true
       error = new Error(`Failed to run codex CLI: ${err.message}`)
       if (resolveNext) {

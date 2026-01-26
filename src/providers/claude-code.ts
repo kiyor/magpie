@@ -4,11 +4,13 @@ import type { AIProvider, Message, ProviderOptions } from './types.js'
 export class ClaudeCodeProvider implements AIProvider {
   name = 'claude-code'
   private cwd: string
+  private timeout: number  // ms, 0 = no timeout
 
   constructor(_options?: ProviderOptions) {
     // No API key needed for Claude Code CLI
     // Use current working directory so claude can access the repo
     this.cwd = process.cwd()
+    this.timeout = 5 * 60 * 1000  // 5 minutes default
   }
 
   setCwd(cwd: string) {
@@ -84,8 +86,22 @@ export class ClaudeCodeProvider implements AIProvider {
     let resolveNext: ((value: { chunk: string | null }) => void) | null = null
     let done = false
     let error: Error | null = null
+    let lastActivity = Date.now()
+
+    // Timeout checker - kill if no activity for too long
+    const timeoutChecker = this.timeout > 0 ? setInterval(() => {
+      if (Date.now() - lastActivity > this.timeout) {
+        child.kill('SIGTERM')
+        done = true
+        error = new Error(`Claude CLI timed out after ${this.timeout / 1000}s of inactivity`)
+        if (resolveNext) {
+          resolveNext({ chunk: null })
+        }
+      }
+    }, 10000) : null  // Check every 10s
 
     child.stdout.on('data', (data) => {
+      lastActivity = Date.now()
       const chunk = data.toString()
       if (resolveNext) {
         resolveNext({ chunk })
@@ -96,12 +112,13 @@ export class ClaudeCodeProvider implements AIProvider {
     })
 
     child.stderr.on('data', (_data) => {
-      // Ignore stderr for now, claude CLI may output progress there
+      lastActivity = Date.now()  // Activity on stderr also counts
     })
 
     child.on('close', (code) => {
+      if (timeoutChecker) clearInterval(timeoutChecker)
       done = true
-      if (code !== 0) {
+      if (code !== 0 && !error) {
         error = new Error(`Claude CLI exited with code ${code}`)
       }
       if (resolveNext) {
@@ -110,6 +127,7 @@ export class ClaudeCodeProvider implements AIProvider {
     })
 
     child.on('error', (err) => {
+      if (timeoutChecker) clearInterval(timeoutChecker)
       done = true
       error = new Error(`Failed to run claude CLI: ${err.message}`)
       if (resolveNext) {
