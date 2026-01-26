@@ -1,4 +1,5 @@
 export * from './types.js'
 export * from './anthropic.js'
 export * from './openai.js'
+export * from './claude-code.js'
 export * from './factory.js'

@@ -18,6 +18,7 @@ export interface MagpieConfig {
     anthropic?: ProviderConfig
     openai?: ProviderConfig
     google?: ProviderConfig
+    'claude-code'?: { enabled: boolean }
   }
   defaults: DefaultsConfig
   reviewers: Record<string, ReviewerConfig>

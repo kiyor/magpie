@@ -7,11 +7,13 @@ describe('Provider Factory', () => {
   const mockConfig: MagpieConfig = {
     providers: {
       anthropic: { api_key: 'ant-key' },
-      openai: { api_key: 'oai-key' }
+      openai: { api_key: 'oai-key' },
+      'claude-code': { enabled: true }
     },
     defaults: { max_rounds: 3, output_format: 'markdown' },
     reviewers: {},
-    summarizer: { model: 'claude-sonnet-4-20250514', prompt: '' }
+    summarizer: { model: 'claude-sonnet-4-20250514', prompt: '' },
+    analyzer: { model: 'claude-sonnet-4-20250514', prompt: '' }
   }
 
   describe('getProviderForModel', () => {
@@ -27,6 +29,10 @@ describe('Provider Factory', () => {
 
     it('should return google for gemini models', () => {
       expect(getProviderForModel('gemini-pro')).toBe('google')
+    })
+
+    it('should return claude-code for claude-code model', () => {
+      expect(getProviderForModel('claude-code')).toBe('claude-code')
     })
   })
 
@@ -44,6 +50,11 @@ describe('Provider Factory', () => {
     it('should throw for missing provider config', () => {
       const configWithoutOpenAI = { ...mockConfig, providers: { anthropic: { api_key: 'key' } } }
       expect(() => createProvider('gpt-4o', configWithoutOpenAI)).toThrow()
+    })
+
+    it('should create claude-code provider', () => {
+      const provider = createProvider('claude-code', mockConfig)
+      expect(provider.name).toBe('claude-code')
     })
   })
 })

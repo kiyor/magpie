@@ -3,8 +3,12 @@ import type { AIProvider } from './types.js'
 import type { MagpieConfig } from '../config/types.js'
 import { AnthropicProvider } from './anthropic.js'
 import { OpenAIProvider } from './openai.js'
+import { ClaudeCodeProvider } from './claude-code.js'
 
-export function getProviderForModel(model: string): 'anthropic' | 'openai' | 'google' {
+export function getProviderForModel(model: string): 'anthropic' | 'openai' | 'google' | 'claude-code' {
+  if (model === 'claude-code') {
+    return 'claude-code'
+  }
   if (model.startsWith('claude')) {
     return 'anthropic'
   }
@@ -19,6 +23,12 @@ export function getProviderForModel(model: string): 'anthropic' | 'openai' | 'go
 
 export function createProvider(model: string, config: MagpieConfig): AIProvider {
   const providerName = getProviderForModel(model)
+
+  // Claude Code doesn't need API key config
+  if (providerName === 'claude-code') {
+    return new ClaudeCodeProvider()
+  }
+
   const providerConfig = config.providers[providerName]
 
   if (!providerConfig) {
