@@ -10,13 +10,16 @@ Multi-AI adversarial PR review tool. Let different AI models review your code li
 
 ## Supported AI Providers
 
-| Provider | Description |
-|----------|-------------|
-| `claude-code` | Claude Code CLI (requires `claude` command) |
-| `codex-cli` | OpenAI Codex CLI (requires `codex` command) |
-| `gemini-*` | Google Gemini API (requires API Key) |
-| `anthropic` | Anthropic API (requires API Key) |
-| `openai` | OpenAI API (requires API Key) |
+| Provider | Type | Description |
+|----------|------|-------------|
+| `claude-code` | CLI | Claude Code CLI (uses your subscription, no API key) |
+| `codex-cli` | CLI | OpenAI Codex CLI (uses your subscription, no API key) |
+| `gemini-cli` | CLI | Gemini CLI (uses Google account login, no API key) |
+| `claude-*` | API | Anthropic API (requires ANTHROPIC_API_KEY) |
+| `gpt-*` | API | OpenAI API (requires OPENAI_API_KEY) |
+| `gemini-*` | API | Google Gemini API (requires GOOGLE_API_KEY) |
+
+**Recommended**: Use CLI providers (claude-code, codex-cli, gemini-cli) - they're free with your subscriptions and don't require API keys.
 
 ## Installation
 
@@ -38,17 +41,20 @@ npm link
 ## Quick Start
 
 ```bash
-# Initialize config file
+# Initialize config file (interactive)
 magpie init
 
-# Edit config
-vim ~/.magpie/config.yaml
+# Or with defaults
+magpie init -y
 
 # Navigate to the repo you want to review
 cd your-repo
 
-# Start review
+# Start review (PR number)
 magpie review 12345
+
+# Or with full URL
+magpie review https://github.com/owner/repo/pull/12345
 ```
 
 ## Configuration
@@ -56,14 +62,8 @@ magpie review 12345
 Config file is located at `~/.magpie/config.yaml`:
 
 ```yaml
-# AI Providers config
-providers:
-  claude-code:
-    enabled: true
-  codex-cli:
-    enabled: true
-  google:
-    api_key: YOUR_GEMINI_API_KEY
+# AI Providers (CLI tools don't need config)
+providers: {}
 
 # Default settings
 defaults:
@@ -85,8 +85,8 @@ reviewers:
       3. **Architecture** - Does this fit the overall design? Any coupling issues?
       4. **Simplicity** - Is this the simplest solution? Over-engineering?
 
-  codex:
-    model: codex-cli
+  gemini:
+    model: gemini-cli
     prompt: |
       # Same as above...
 
@@ -116,12 +116,12 @@ summarizer:
 ## CLI Options
 
 ```bash
-magpie review [pr-number] [options]
+magpie review [pr-number|url] [options]
 
 Options:
   -c, --config <path>    Path to config file
   -r, --rounds <number>  Maximum debate rounds (default: 3)
-  -i, --interactive      Interactive mode (pause between turns)
+  -i, --interactive      Interactive mode (pause between turns, Q&A)
   -o, --output <file>    Output to file
   -f, --format <format>  Output format (markdown|json)
   --no-converge          Disable convergence detection (enabled by default)
@@ -133,8 +133,9 @@ Options:
 ### Review Modes
 
 ```bash
-# Review a GitHub PR
+# Review a GitHub PR (number or URL)
 magpie review 12345
+magpie review https://github.com/owner/repo/pull/12345
 
 # Review local uncommitted changes (staged + unstaged)
 magpie review --local
@@ -154,18 +155,39 @@ magpie review --files src/foo.ts src/bar.ts
 ```
 1. Analyzer analyzes PR
    ↓
-2. Multi-round debate
+2. [Interactive] Post-analysis Q&A (ask specific reviewers)
+   ↓
+3. Multi-round debate
    ├─ Reviewer 1 (Claude) gives feedback
-   ├─ Reviewer 2 (Codex) responds and adds insights
+   ├─ Reviewer 2 (Gemini) responds and adds insights
    ├─ Reviewer 1 rebuts or agrees
    └─ ... (repeat until max rounds or convergence)
    ↓
-3. Each Reviewer summarizes their points
+4. Each Reviewer summarizes their points
    ↓
-4. Summarizer produces final conclusion
+5. Summarizer produces final conclusion
 ```
 
 ## Features
+
+### Session Persistence
+
+Each reviewer maintains a session across debate rounds, reducing token usage by not re-sending full conversation history.
+
+### Post-Analysis Q&A (Interactive Mode)
+
+In interactive mode (`-i`), after analysis you can ask specific reviewers questions before the debate begins:
+
+```bash
+magpie review 12345 -i
+
+# After analysis...
+💡 You can ask specific reviewers questions before the debate begins.
+   Format: @reviewer_id question (e.g., @claude What about security?)
+   Available: @claude
+   Available: @gemini
+❓ Ask a question or press Enter to start debate: @claude What about the error handling?
+```
 
 ### Convergence Detection
 
@@ -181,25 +203,30 @@ magpie review 12345 --no-converge
 
 Set `defaults.check_convergence: false` in config to disable by default.
 
+### Markdown Rendering
+
+All outputs (analysis, reviewer comments, final conclusion) are rendered with proper markdown formatting in terminal - headers, bold, tables, code blocks all display correctly.
+
 ### Token Usage Tracking
 
 Displays token usage and estimated cost after each review:
 
 ```
-=== Token Usage (Estimated) ===
-  analyzer: 1,234 in / 567 out
-  claude: 2,345 in / 890 out
-  codex: 2,456 in / 912 out
-  summarizer: 3,456 in / 234 out
-  Total: 9,491 in / 2,603 out (~$0.1209)
+── Token Usage (Estimated) ──
+  analyzer       88 in     438 out
+  claude      4,776 in   1,423 out
+  gemini      6,069 in     664 out
+  summarizer    505 in     322 out
+──────────────────────────────────
+  Total      11,438 in   2,847 out  ~$0.1429
 ```
 
-### Interactive Mode
+### Cold Jokes
 
-Use `-i` to enter interactive mode, allowing you to inject your own opinions during the debate:
+While waiting for AI reviewers, enjoy programmer jokes:
 
-```bash
-magpie review 12345 -i
+```
+⠋ claude is thinking... | Why do programmers confuse Halloween and Christmas? Because Oct 31 = Dec 25
 ```
 
 ## Development
