@@ -1,0 +1,127 @@
+// src/orchestrator/orchestrator.ts
+import type { Message } from '../providers/types.js'
+import type {
+  Reviewer,
+  DebateMessage,
+  DebateSummary,
+  DebateResult,
+  OrchestratorOptions
+} from './types.js'
+
+export class DebateOrchestrator {
+  private reviewers: Reviewer[]
+  private summarizer: Reviewer
+  private options: OrchestratorOptions
+  private conversationHistory: DebateMessage[] = []
+
+  constructor(
+    reviewers: Reviewer[],
+    summarizer: Reviewer,
+    options: OrchestratorOptions
+  ) {
+    this.reviewers = reviewers
+    this.summarizer = summarizer
+    this.options = options
+  }
+
+  async run(prNumber: string, initialPrompt: string): Promise<DebateResult> {
+    this.conversationHistory = []
+
+    // Run debate rounds
+    for (let round = 1; round <= this.options.maxRounds; round++) {
+      for (const reviewer of this.reviewers) {
+        // Check for user interruption in interactive mode
+        if (this.options.interactive && this.options.onInteractive) {
+          const userInput = await this.options.onInteractive()
+          if (userInput === 'q') {
+            break
+          }
+          if (userInput) {
+            this.conversationHistory.push({
+              reviewerId: 'user',
+              content: userInput,
+              timestamp: new Date()
+            })
+          }
+        }
+
+        const messages = this.buildMessages(initialPrompt, reviewer.id)
+        const response = await reviewer.provider.chat(messages, reviewer.systemPrompt)
+
+        this.conversationHistory.push({
+          reviewerId: reviewer.id,
+          content: response,
+          timestamp: new Date()
+        })
+
+        this.options.onMessage?.(reviewer.id, response)
+      }
+
+      this.options.onRoundComplete?.(round)
+    }
+
+    // Collect summaries from each reviewer
+    const summaries = await this.collectSummaries()
+
+    // Get final conclusion from summarizer
+    const finalConclusion = await this.getFinalConclusion(summaries)
+
+    return {
+      prNumber,
+      messages: this.conversationHistory,
+      summaries,
+      finalConclusion
+    }
+  }
+
+  private buildMessages(initialPrompt: string, currentReviewerId: string): Message[] {
+    const messages: Message[] = [
+      { role: 'user', content: initialPrompt }
+    ]
+
+    for (const msg of this.conversationHistory) {
+      const role = msg.reviewerId === currentReviewerId ? 'assistant' : 'user'
+      const prefix = msg.reviewerId === 'user' ? '[User]: ' : `[Reviewer]: `
+      messages.push({
+        role,
+        content: role === 'user' ? prefix + msg.content : msg.content
+      })
+    }
+
+    return messages
+  }
+
+  private async collectSummaries(): Promise<DebateSummary[]> {
+    const summaries: DebateSummary[] = []
+    const summaryPrompt = 'Please summarize your key points and conclusions. Do not reveal your identity or role.'
+
+    for (const reviewer of this.reviewers) {
+      const messages = this.buildMessages(summaryPrompt, reviewer.id)
+      messages.push({ role: 'user', content: summaryPrompt })
+
+      const summary = await reviewer.provider.chat(messages, reviewer.systemPrompt)
+      summaries.push({
+        reviewerId: reviewer.id,
+        summary
+      })
+    }
+
+    return summaries
+  }
+
+  private async getFinalConclusion(summaries: DebateSummary[]): Promise<string> {
+    const summaryText = summaries
+      .map((s, i) => `Reviewer ${i + 1}:\n${s.summary}`)
+      .join('\n\n---\n\n')
+
+    const prompt = `Based on the following anonymous reviewer summaries, provide a final conclusion including:
+- Points of consensus
+- Points of disagreement with analysis
+- Recommended action items
+
+${summaryText}`
+
+    const messages: Message[] = [{ role: 'user', content: prompt }]
+    return this.summarizer.provider.chat(messages, this.summarizer.systemPrompt)
+  }
+}
