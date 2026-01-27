@@ -7,6 +7,8 @@ Multi-AI adversarial PR review tool. Let different AI models review your code li
 - **Same Perspective, Different Models**: All reviewers use the same prompt (Linus-style), but are powered by different AI models
 - **Natural Adversarial**: Differences between models naturally create disagreements and debates
 - **Anti-Sycophancy**: Explicitly tells AI they're debating with other AIs, preventing mutual agreement bias
+- **Fair Debate Model**: All reviewers in the same round see identical information - no unfair advantage from execution order
+- **Parallel Execution**: Same-round reviewers run concurrently for faster reviews
 
 ## Supported AI Providers
 
@@ -67,7 +69,7 @@ providers: {}
 
 # Default settings
 defaults:
-  max_rounds: 2
+  max_rounds: 5           # Maximum debate rounds
   output_format: markdown
   check_convergence: true  # Stop early when consensus reached
 
@@ -119,15 +121,44 @@ summarizer:
 magpie review [pr-number|url] [options]
 
 Options:
-  -c, --config <path>    Path to config file
-  -r, --rounds <number>  Maximum debate rounds (default: 3)
-  -i, --interactive      Interactive mode (pause between turns, Q&A)
-  -o, --output <file>    Output to file
-  -f, --format <format>  Output format (markdown|json)
-  --no-converge          Disable convergence detection (enabled by default)
-  -l, --local            Review local uncommitted changes
-  -b, --branch [base]    Review current branch vs base (default: main)
-  --files <files...>     Review specific files
+  -c, --config <path>       Path to config file
+  -r, --rounds <number>     Maximum debate rounds (default: 5)
+  -i, --interactive         Interactive mode (pause between turns, Q&A)
+  -o, --output <file>       Output to file
+  -f, --format <format>     Output format (markdown|json)
+  --no-converge             Disable convergence detection (enabled by default)
+  -l, --local               Review local uncommitted changes
+  -b, --branch [base]       Review current branch vs base (default: main)
+  --files <files...>        Review specific files
+  --reviewers <ids>         Comma-separated reviewer IDs (e.g., claude-code,gemini-cli)
+  -a, --all                 Use all configured reviewers (skip selection)
+  --git-remote <remote>     Git remote for PR URL detection (default: origin)
+```
+
+### Reviewer Selection
+
+By default, Magpie prompts you to select reviewers interactively:
+
+```bash
+# Interactive selection (default)
+magpie review 12345
+
+# Select reviewers from config:
+#   1. claude-code
+#   2. codex-cli
+#   3. gemini-cli
+# Enter numbers separated by commas (e.g., 1,2): 1,3
+```
+
+You can also specify reviewers directly:
+
+```bash
+# Use all configured reviewers
+magpie review 12345 --all
+magpie review 12345 -a
+
+# Specify reviewers by ID
+magpie review 12345 --reviewers claude-code,gemini-cli
 ```
 
 ### Review Modes
@@ -158,9 +189,15 @@ magpie review --files src/foo.ts src/bar.ts
 2. [Interactive] Post-analysis Q&A (ask specific reviewers)
    ↓
 3. Multi-round debate
-   ├─ Reviewer 1 (Claude) gives feedback
-   ├─ Reviewer 2 (Gemini) responds and adds insights
-   ├─ Reviewer 1 rebuts or agrees
+   ├─ Round 1: All reviewers give INDEPENDENT opinions (parallel)
+   │           No reviewer sees others' responses yet
+   │           ↓
+   ├─ Convergence check: Did reviewers reach consensus?
+   │           ↓
+   ├─ Round 2+: Reviewers see ALL previous rounds (parallel)
+   │            Each reviewer responds to others' points
+   │            Same-round reviewers see identical information
+   │            ↓
    └─ ... (repeat until max rounds or convergence)
    ↓
 4. Each Reviewer summarizes their points
@@ -168,18 +205,44 @@ magpie review --files src/foo.ts src/bar.ts
 5. Summarizer produces final conclusion
 ```
 
+### Fair Debate Model
+
+Magpie uses a fair debate model where:
+
+- **Round 1**: Each reviewer gives their independent opinion without seeing others
+- **Round 2+**: Each reviewer sees ALL previous rounds' messages
+- **Same-round fairness**: All reviewers in the same round see identical information
+- **Parallel execution**: Same-round reviewers run concurrently (faster reviews)
+
+This ensures no reviewer has an unfair advantage from execution order.
+
 ## Features
 
 ### Session Persistence
 
 Reviewers that support sessions maintain context across debate rounds, reducing token usage.
 
-| Provider | Session Support |
-|----------|-----------------|
-| `claude-code` | Yes - Full session with explicit ID |
-| `codex-cli` | Yes - Full session with explicit ID |
-| `gemini-cli` | No - Uses full context each round |
-| API providers | No - Uses full context each round |
+| Provider | Session Support | Notes |
+|----------|-----------------|-------|
+| `claude-code` | Yes | Full session with explicit ID |
+| `codex-cli` | Yes | Full session with explicit ID |
+| `gemini-cli` | No | Uses full context each round |
+| API providers | No | Uses full context each round |
+
+### Parallel Execution
+
+All reviewers in the same round execute concurrently. Results are collected and displayed after all reviewers complete:
+
+```
+⠋ Round 1: All reviewers thinking (parallel)...
+   ↓ (all reviewers running simultaneously)
+[claude-code]: First review...
+[gemini-cli]: First review...
+   ↓
+⠋ Checking convergence...
+   ↓
+⠋ Round 2: All reviewers thinking (parallel)...
+```
 
 ### Post-Analysis Q&A (Interactive Mode)
 
