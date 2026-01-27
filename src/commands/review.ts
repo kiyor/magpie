@@ -5,7 +5,7 @@ import { execSync } from 'child_process'
 import { loadConfig } from '../config/loader.js'
 import { createProvider } from '../providers/factory.js'
 import { DebateOrchestrator } from '../orchestrator/orchestrator.js'
-import type { Reviewer } from '../orchestrator/types.js'
+import type { Reviewer, ReviewerStatus } from '../orchestrator/types.js'
 import { createInterface } from 'readline'
 import { marked } from 'marked'
 import TerminalRenderer from 'marked-terminal'
@@ -304,9 +304,28 @@ export const reviewCommand = new Command('review')
       let messageBuffer = ''  // Buffer for current reviewer's message
 
       // Use object ref to avoid TypeScript control flow issues with closures
-      const spinnerRef: { spinner: ReturnType<typeof ora> | null; interval: ReturnType<typeof setInterval> | null } = {
+      const spinnerRef: {
+        spinner: ReturnType<typeof ora> | null
+        interval: ReturnType<typeof setInterval> | null
+        parallelStatuses: ReviewerStatus[] | null
+      } = {
         spinner: null,
-        interval: null
+        interval: null,
+        parallelStatuses: null
+      }
+
+      // Format parallel status display
+      const formatParallelStatus = (round: number, statuses: ReviewerStatus[]): string => {
+        const statusParts = statuses.map(s => {
+          if (s.status === 'done') {
+            return chalk.green(`✓ ${s.reviewerId}`) + chalk.dim(` (${s.duration?.toFixed(1)}s)`)
+          } else if (s.status === 'thinking') {
+            return chalk.yellow(`⋯ ${s.reviewerId}`)
+          } else {
+            return chalk.dim(`○ ${s.reviewerId}`)
+          }
+        })
+        return `Round ${round}: [${statusParts.join(' | ')}]`
       }
 
       // Render buffered message when reviewer changes
@@ -337,24 +356,41 @@ export const reviewCommand = new Command('review')
             console.log(chalk.yellow.bold(`\n┌─ 🔍 Convergence Judge ─────────────────────────`))
           }
 
+          const isParallelRound = reviewerId.startsWith('round-')
           const baseLabel = reviewerId === 'analyzer' ? 'Analyzing changes' :
                        reviewerId === 'summarizer' ? 'Generating final summary' :
                        reviewerId === 'convergence-check' ? 'Evaluating if reviewers reached consensus' :
-                       reviewerId.startsWith('round-') ? `Round ${reviewerId.split('-')[1]}: All reviewers thinking (parallel)` :
+                       isParallelRound ? `Round ${reviewerId.split('-')[1]}: Starting parallel review` :
                        `${reviewerId} is thinking`
 
-          // Show spinner with a joke
+          // Show spinner with a joke (and parallel status if available)
           const updateSpinner = () => {
             const joke = getRandomJoke()
             if (spinnerRef.spinner) {
-              spinnerRef.spinner.text = `${baseLabel}... ${chalk.dim(`| ${joke}`)}`
+              if (spinnerRef.parallelStatuses && isParallelRound) {
+                const round = parseInt(reviewerId.split('-')[1])
+                const statusLine = formatParallelStatus(round, spinnerRef.parallelStatuses)
+                spinnerRef.spinner.text = `${statusLine} ${chalk.dim(`| ${joke}`)}`
+              } else {
+                spinnerRef.spinner.text = `${baseLabel}... ${chalk.dim(`| ${joke}`)}`
+              }
             }
           }
 
+          spinnerRef.parallelStatuses = null  // Reset for new waiting phase
           spinnerRef.spinner = ora(`${baseLabel}...`).start()
           updateSpinner()
           // Update joke every 8 seconds
           spinnerRef.interval = setInterval(updateSpinner, 8000)
+        },
+        onParallelStatus: (round, statuses) => {
+          spinnerRef.parallelStatuses = statuses
+          // Immediately update spinner to show new status
+          if (spinnerRef.spinner) {
+            const joke = getRandomJoke()
+            const statusLine = formatParallelStatus(round, statuses)
+            spinnerRef.spinner.text = `${statusLine} ${chalk.dim(`| ${joke}`)}`
+          }
         },
         onMessage: (reviewerId, chunk) => {
           if (spinnerRef.interval) {

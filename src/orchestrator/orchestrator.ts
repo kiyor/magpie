@@ -6,7 +6,8 @@ import type {
   DebateSummary,
   DebateResult,
   OrchestratorOptions,
-  TokenUsage
+  TokenUsage,
+  ReviewerStatus
 } from './types.js'
 
 export class DebateOrchestrator {
@@ -271,14 +272,43 @@ Reply with ONLY one word: CONVERGED or NOT_CONVERGED`
           messages: this.buildMessages(reviewer.id)
         }))
 
-        // Execute all reviewers in parallel
+        // Initialize status tracking for parallel execution
+        const statuses: ReviewerStatus[] = this.reviewers.map(r => ({
+          reviewerId: r.id,
+          status: 'pending' as const
+        }))
+
+        // Execute all reviewers in parallel with status tracking
         this.options.onWaiting?.(`round-${round}`)
+        this.options.onParallelStatus?.(round, statuses)
+
         const results = await Promise.all(
-          reviewerTasks.map(async ({ reviewer, messages }) => {
+          reviewerTasks.map(async ({ reviewer, messages }, index) => {
+            // Mark as thinking
+            statuses[index] = {
+              reviewerId: reviewer.id,
+              status: 'thinking',
+              startTime: Date.now()
+            }
+            this.options.onParallelStatus?.(round, statuses)
+
             let fullResponse = ''
             for await (const chunk of reviewer.provider.chatStream(messages, reviewer.systemPrompt)) {
               fullResponse += chunk
             }
+
+            // Mark as done
+            const endTime = Date.now()
+            const startTime = statuses[index].startTime!
+            statuses[index] = {
+              reviewerId: reviewer.id,
+              status: 'done',
+              startTime,
+              endTime,
+              duration: (endTime - startTime) / 1000
+            }
+            this.options.onParallelStatus?.(round, statuses)
+
             const inputText = messages.map(m => m.content).join('\n') + (reviewer.systemPrompt || '')
             return { reviewer, fullResponse, inputText }
           })

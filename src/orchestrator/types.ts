@@ -35,6 +35,14 @@ export interface DebateResult {
   convergedAtRound?: number  // If converged early
 }
 
+export interface ReviewerStatus {
+  reviewerId: string
+  status: 'pending' | 'thinking' | 'done'
+  startTime?: number  // timestamp ms
+  endTime?: number    // timestamp ms
+  duration?: number   // seconds
+}
+
 export interface OrchestratorOptions {
   maxRounds: number
   interactive: boolean
@@ -42,6 +50,7 @@ export interface OrchestratorOptions {
   onRoundComplete?: (round: number, converged: boolean) => void
   onInteractive?: () => Promise<string | null>
   onWaiting?: (reviewerId: string) => void
+  onParallelStatus?: (round: number, statuses: ReviewerStatus[]) => void  // Track parallel execution
   checkConvergence?: boolean  // Enable convergence detection
   // Post-analysis Q&A: return { target: '@reviewer_id', question: 'text' } or null to continue
   onPostAnalysisQA?: () => Promise<{ target: string; question: string } | null>
