@@ -402,6 +402,9 @@ export const reviewCommand = new Command('review')
       const allReviewerIds = Object.keys(config.reviewers)
       let selectedIds: string[]
 
+      // Stop spinner before interactive selection
+      spinner.stop()
+
       if (options.reviewers) {
         // Use --reviewers flag
         selectedIds = options.reviewers.split(',').map((s: string) => s.trim())
